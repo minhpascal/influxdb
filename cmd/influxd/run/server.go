@@ -55,7 +55,7 @@ type Server struct {
 	MetaClient *meta.Client
 
 	TSDBStore     *tsdb.Store
-	QueryExecutor *cluster.QueryExecutor
+	QueryExecutor *influxql.QueryExecutor
 	PointsWriter  *cluster.PointsWriter
 	Subscriber    *subscriber.Service
 
@@ -166,16 +166,19 @@ func NewServer(c *Config, buildInfo *BuildInfo) (*Server, error) {
 	s.PointsWriter.Subscriber = s.Subscriber
 
 	// Initialize query executor.
-	s.QueryExecutor = cluster.NewQueryExecutor()
-	s.QueryExecutor.MetaClient = s.MetaClient
-	s.QueryExecutor.TSDBStore = s.TSDBStore
-	s.QueryExecutor.Monitor = s.Monitor
-	s.QueryExecutor.PointsWriter = s.PointsWriter
-	s.QueryExecutor.QueryTimeout = time.Duration(c.Cluster.QueryTimeout)
+	s.QueryExecutor = influxql.NewQueryExecutor()
 	s.QueryExecutor.QueryManager = influxql.DefaultQueryManager(c.Cluster.MaxConcurrentQueries)
-	s.QueryExecutor.MaxSelectPointN = c.Cluster.MaxSelectPointN
-	s.QueryExecutor.MaxSelectSeriesN = c.Cluster.MaxSelectSeriesN
-	s.QueryExecutor.MaxSelectBucketsN = c.Cluster.MaxSelectBucketsN
+	s.QueryExecutor.StatementExecutor = &cluster.StatementExecutor{
+		MetaClient:        s.MetaClient,
+		TSDBStore:         s.TSDBStore,
+		Monitor:           s.Monitor,
+		PointsWriter:      s.PointsWriter,
+		QueryManager:      s.QueryExecutor.QueryManager,
+		MaxSelectPointN:   c.Cluster.MaxSelectPointN,
+		MaxSelectSeriesN:  c.Cluster.MaxSelectSeriesN,
+		MaxSelectBucketsN: c.Cluster.MaxSelectBucketsN,
+	}
+	s.QueryExecutor.QueryTimeout = time.Duration(c.Cluster.QueryTimeout)
 	if c.Data.QueryLogEnabled {
 		s.QueryExecutor.LogOutput = os.Stderr
 	}
